@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modulo di compilazione — {{ azienda.ragione_sociale }}</title>
+
+    {% include "partials/_navbar.html" %}
+
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--testo);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            line-height: 1.6;
+        }
+
+        .banda {
+            display: flex;
+            justify-content: center;
+            padding: 52px 16px 70px;
+        }
+
+        .container {
+            background: #fff;
+            padding: 36px 32px;
+            border-radius: var(--raggio);
+            box-shadow: 0 18px 45px rgba(24, 20, 60, 0.28);
+            width: 100%;
+            max-width: 400px;
+            animation: entra 0.45s ease both;
+        }
+
+        @keyframes entra {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 { margin: 0 0 6px; font-size: 1.5rem; text-align: center; }
+
+        .sottotitolo {
+            margin: 0 0 24px;
+            text-align: center;
+            color: var(--tenue);
+            font-size: 0.9rem;
+        }
+
+        .campo { margin-bottom: 18px; }
+
+        label, .etichetta {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #3c4157;
+        }
+
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--bordo);
+            border-radius: 8px;
+            background: #f9fafc;
+            font-size: 0.95rem;
+            color: var(--testo);
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="date"]:focus {
+            outline: none;
+            background: #fff;
+            border-color: var(--primario);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.18);
+        }
+
+        .scelte { display: flex; gap: 10px; }
+
+        .scelte input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .pill {
+            flex: 1;
+            margin: 0;
+            padding: 10px 12px;
+            text-align: center;
+            font-weight: 500;
+            border: 1px solid var(--bordo);
+            border-radius: 999px;
+            background: #f9fafc;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pill:hover { border-color: var(--primario); }
+
+        .scelte input[type="radio"]:checked + .pill {
+            background: var(--primario);
+            border-color: var(--primario);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+        }
+
+        .checkbox { display: flex; align-items: center; gap: 10px; }
+        .checkbox label { margin: 0; font-weight: 500; font-size: 0.9rem; }
+
+        .checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primario);
+            cursor: pointer;
+        }
+
+        .container button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 8px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primario), var(--viola));
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.2s;
+        }
+
+        .container button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(102, 126, 234, 0.4);
+        }
+
+        .container button:active { transform: translateY(0); }
+    </style>
+</head>
+
+<body>
+    {% include "partials/_navbar.html" %}
+
+    <div class="banda">
+        <div class="container">
+            <h2>Modulo di compilazione</h2>
+            <p class="sottotitolo">Compila i campi e invia: i dati verranno riepilogati in JSON</p>
+
+            <form action="{{ url_for('submit_form', token=token) }}" method="POST">
+                <input type="hidden" name="token" value="{{ token }}">
+
+                <div class="campo">
+                    <label for="nome">Nome</label>
+                    <input type="text" id="nome" name="nome" placeholder="Mario Rossi" required>
+                </div>
+
+                <div class="campo">
+                    <label for="data">Data di nascita</label>
+                    <input type="date" id="data" name="data" required>
+                </div>
+
+                <div class="campo">
+                    <span class="etichetta">Genere</span>
+                    <div class="scelte">
+                        <input type="radio" id="maschio" name="genere" value="Maschio" required>
+                        <label class="pill" for="maschio">Maschio</label>
+
+                        <input type="radio" id="femmina" name="genere" value="Femmina">
+                        <label class="pill" for="femmina">Femmina</label>
+                    </div>
+                </div>
+
+                <div class="campo checkbox">
+                    <input type="checkbox" id="newsletter" name="newsletter">
+                    <label for="newsletter">Voglio ricevere la newsletter</label>
+                </div>
+
+                <button type="submit">Invia modulo</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

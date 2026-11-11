@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if token %}Profilo aziendale{% else %}Accesso{% endif %} — {{ azienda.ragione_sociale }}</title>
+
+    {% include "partials/_navbar.html" %}
+
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--testo);
+            background: var(--sfondo);
+            line-height: 1.65;
+        }
+
+        /* ---------- fascia con la card di accesso ---------- */
+        .banda-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 48px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: #fff;
+            padding: 36px 32px;
+            border-radius: var(--raggio);
+            box-shadow: 0 18px 45px rgba(24, 20, 60, 0.28);
+            width: 100%;
+            max-width: 380px;
+            animation: entra 0.45s ease both;
+        }
+
+        @keyframes entra {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 { margin: 0 0 6px; font-size: 1.5rem; text-align: center; }
+
+        .sottotitolo {
+            margin: 0 0 24px;
+            text-align: center;
+            color: var(--tenue);
+            font-size: 0.9rem;
+        }
+
+        .campo { margin-bottom: 18px; }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #3c4157;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--bordo);
+            border-radius: 8px;
+            background: #f9fafc;
+            font-size: 0.95rem;
+            color: var(--testo);
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            background: #fff;
+            border-color: var(--primario);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.18);
+        }
+
+        .container button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 8px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primario), var(--viola));
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+        }
+
+        .container button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(102, 126, 234, 0.4);
+        }
+
+        .container button:active:not(:disabled) { transform: translateY(0); }
+        .container button:disabled { opacity: 0.65; cursor: progress; }
+
+        .errore {
+            margin-bottom: 16px;
+            padding: 11px 14px;
+            border-left: 4px solid var(--errore);
+            border-radius: 6px;
+            background: #fdf0f0;
+            color: #a9252a;
+            font-size: 0.88rem;
+        }
+
+        .shake { animation: scuoti 0.35s ease; }
+
+        @keyframes scuoti {
+            0%, 100% { transform: translateX(0); }
+            20%      { transform: translateX(-7px); }
+            40%      { transform: translateX(7px); }
+            60%      { transform: translateX(-4px); }
+            80%      { transform: translateX(4px); }
+        }
+
+        .hint {
+            margin: 18px 0 0;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--tenue);
+        }
+    </style>
+</head>
+
+<body>
+    {% include "partials/_navbar.html" %}
+
+    {% if not token %}
+        <div class="banda-login">
+            <div class="container">
+                <h2>Accesso riservato</h2>
+                <p class="sottotitolo">Inserisci le credenziali per compilare il modulo</p>
+
+                <form id="login-form" autocomplete="off">
+                    <div class="campo">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+
+                    <div class="campo">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+
+                    <div id="errore" class="errore" hidden></div>
+
+                    <button type="submit" id="btn-login">Accedi</button>
+                </form>
+
+                <p class="hint">Prova: <strong>ciccio</strong> / <strong>pasticcio1</strong></p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ==================== PROFILO AZIENDALE ==================== -->
+    <div class="contenuto">
+
+        <section class="hero" id="panoramica">
+            <h1>{{ azienda.ragione_sociale }}</h1>
+            <p class="claim">{{ azienda.claim }}</p>
+            <p>{{ azienda.descrizione }}</p>
+
+            <div>
+                <span class="chip">Settore: {{ azienda.settore }}</span>
+                <span class="chip">Dal {{ azienda.fondazione }}</span>
+                <span class="chip">{{ azienda.sede_legale }}</span>
+                <span class="chip">{{ azienda.dipendenti }} dipendenti</span>
+            </div>
+
+            <dl class="scheda">
+                <div><dt>Ragione sociale</dt><dd>{{ azienda.ragione_sociale }}</dd></div>
+                <div><dt>Forma giuridica</dt><dd>{{ azienda.forma_giuridica }}</dd></div>
+                <div><dt>Partita IVA</dt><dd>{{ azienda.partita_iva }}</dd></div>
+                <div><dt>Codice fiscale</dt><dd>{{ azienda.codice_fiscale }}</dd></div>
+                <div><dt>Numero REA</dt><dd>{{ azienda.rea }}</dd></div>
+                <div><dt>Capitale sociale</dt><dd>{{ azienda.capitale_sociale }}</dd></div>
+                <div><dt>Sede legale</dt><dd>{{ azienda.sede_legale }}</dd></div>
+                <div><dt>Orari uffici</dt><dd>{{ azienda.orari }}</dd></div>
+            </dl>
+        </section>
+
+        <section id="storia">
+            <p class="occhiello">Chi siamo</p>
+            <h2>Sedici anni di infrastrutture in piedi</h2>
+            <p>
+                Aurora Tecnologie è cresciuta un cliente alla volta, senza acquisizioni aggressive
+                e senza mai esternalizzare il presidio tecnico. Ogni tappa qui sotto corrisponde a
+                un investimento reale: persone assunte, sale messe in funzione, certificazioni
+                ottenute dopo audit di terza parte.
+            </p>
+
+            <div class="timeline">
+                {% for t in storia %}
+                    <div class="tappa">
+                        <div class="anno">{{ t.anno }}</div>
+                        <h4>{{ t.titolo }}</h4>
+                        <p>{{ t.testo }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="missione">
+            <p class="occhiello">Missione</p>
+            <h2>Tenere su i sistemi di chi produce</h2>
+            <p>
+                Il nostro lavoro si misura in minuti di fermo macchina evitati. Un cliente che
+                salda componenti per l'automotive non può restare con il MES offline per tre ore:
+                da questa premessa derivano tutte le nostre scelte architetturali, dalla ridondanza
+                N+1 alla reperibilità notturna.
+            </p>
+            <p>
+                Non inseguiamo la tecnologia per moda. Quando valutiamo una nuova piattaforma ci
+                chiediamo tre cose: riduce il rischio operativo, abbassa il costo totale di
+                possesso su cinque anni, e il nostro team è in grado di presidiarla senza dipendere
+                da un singolo fornitore.
+            </p>
+            <blockquote>
+                «Un'infrastruttura è buona quando nessuno si accorge che esiste. Il nostro successo
+                è fatto di giorni in cui non succede niente.»
+            </blockquote>
+        </section>
+
+        <section id="valori">
+            <p class="occhiello">Come lavoriamo</p>
+            <h2>Sei principi non negoziabili</h2>
+            <p>Sono il criterio con cui accettiamo — e a volte rifiutiamo — un incarico.</p>
+
+            <div class="griglia">
+                {% for titolo, testo in valori %}
+                    <div class="card">
+                        <h3>{{ titolo }}</h3>
+                        <p>{{ testo }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="servizi">
+            <p class="occhiello">Cosa facciamo</p>
+            <h2>Aree di competenza</h2>
+            <p>
+                Sei linee di servizio che coprono l'intero ciclo di vita dell'infrastruttura: dalla
+                progettazione al collaudo, fino alla gestione pluriennale in regime di SLA.
+            </p>
+
+            <div class="griglia">
+                {% for s in servizi %}
+                    <div class="card">
+                        <h3>{{ s.titolo }}</h3>
+                        <p>{{ s.testo }}</p>
+                        <ul>
+                            {% for voce in s.voci %}
+                                <li>{{ voce }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="numeri">
+            <p class="occhiello">Dati 2024</p>
+            <h2>L'azienda in cifre</h2>
+            <p>Dati consolidati al 31 dicembre 2024, bilancio approvato dall'assemblea dei soci.</p>
+
+            <div class="griglia">
+                {% for valore, etichetta in numeri %}
+                    <div class="card numero">
+                        <div class="valore">{{ valore }}</div>
+                        <div class="etichetta">{{ etichetta }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="team">
+            <p class="occhiello">Persone</p>
+            <h2>Chi guida l'azienda</h2>
+            <p>
+                Un comitato di direzione snello, con una permanenza media in azienda superiore a
+                sette anni. Nessun ruolo di vertice è ricoperto da manager esterni al settore.
+            </p>
+
+            <div class="griglia">
+                {% for nome, ruolo, bio in team %}
+                    <div class="card persona">
+                        <h3>{{ nome }}</h3>
+                        <div class="ruolo">{{ ruolo }}</div>
+                        <p>{{ bio }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="sostenibilita">
+            <p class="occhiello">Impatto</p>
+            <h2>Sostenibilità ambientale ed energetica</h2>
+            <p>
+                Il data center di Modena è alimentato al 100% da energia rinnovabile certificata da
+                garanzie di origine. Il raffreddamento è a free-cooling per otto mesi l'anno, con
+                scambiatori ridondati e controllo dinamico delle portate.
+            </p>
+            <p>
+                Dal 2022 pubblichiamo un report annuale che copre emissioni Scope 1, 2 e 3, consumo
+                idrico dei sistemi di raffreddamento e tasso di riciclo dell'hardware dismesso, che
+                viene cancellato in modo certificato e reimmesso sul mercato.
+            </p>
+
+            <div class="griglia">
+                {% for valore, etichetta in sostenibilita %}
+                    <div class="card numero">
+                        <div class="valore">{{ valore }}</div>
+                        <div class="etichetta">{{ etichetta }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="certificazioni">
+            <p class="occhiello">Qualità e conformità</p>
+            <h2>Certificazioni attive</h2>
+            <p>
+                Tutte le certificazioni sono emesse da organismi accreditati e soggette ad audit di
+                sorveglianza annuale. I certificati aggiornati sono disponibili su richiesta.
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>Norma</th><th>Ambito</th><th>Attiva</th><th>Stato</th></tr>
+                </thead>
+                <tbody>
+                    {% for norma, ambito, dal in certificazioni %}
+                        <tr>
+                            <td><strong>{{ norma }}</strong></td>
+                            <td>{{ ambito }}</td>
+                            <td>{{ dal }}</td>
+                            <td><span class="pill-verde">Valida</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section id="sedi">
+            <p class="occhiello">Dove siamo</p>
+            <h2>Sedi operative</h2>
+            <p>
+                Quattro sedi, di cui una estera. Il data center primario e la sede legale coincidono
+                con il sito di Modena; tutte le sedi sono raggiungibili con mezzi pubblici.
+            </p>
+
+            <div class="griglia">
+                {% for citta, tipo, indirizzo, paese in sedi %}
+                    <div class="card">
+                        <h3>{{ citta }}</h3>
+                        <div class="ruolo">{{ tipo }}</div>
+                        <p>{{ indirizzo }}</p>
+                        <span class="pill-verde">{{ paese }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="carriere">
+            <p class="occhiello">Lavora con noi</p>
+            <h2>Posizioni aperte e benefit</h2>
+            <p>
+                Cerchiamo persone curiose e ordinate, più interessate a capire come funziona un
+                sistema che a collezionare badge di vendor. Il colloquio tecnico è in presenza o da
+                remoto, dura due ore e include un caso reale semplificato.
+            </p>
+
+            <h3>In cosa consistono i benefit</h3>
+            <ul>
+                {% for b in benefit %}
+                    <li>{{ b }}</li>
+                {% endfor %}
+            </ul>
+
+            <h3 style="margin-top:24px;">Posizioni attualmente aperte</h3>
+            <table>
+                <thead>
+                    <tr><th>Ruolo</th><th>Sede</th><th>Attività principale</th></tr>
+                </thead>
+                <tbody>
+                    {% for ruolo, sede, attivita in posizioni %}
+                        <tr>
+                            <td><strong>{{ ruolo }}</strong></td>
+                            <td>{{ sede }}</td>
+                            <td>{{ attivita }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section id="faq">
+            <p class="occhiello">Domande frequenti</p>
+            <h2>Le risposte che ci chiedono più spesso</h2>
+
+            {% for domanda, risposta in faq %}
+                <details>
+                    <summary>{{ domanda }}</summary>
+                    <p>{{ risposta }}</p>
+                </details>
+            {% endfor %}
+        </section>
+
+        <section id="contatti">
+            <p class="occhiello">Contatti</p>
+            <h2>Riferimenti ufficiali</h2>
+            <p>
+                Per informazioni commerciali, gare e rapporti con la pubblica amministrazione usa i
+                canali ufficiali. Per segnalazioni urgenti su servizi gestiti, il riferimento è il
+                numero di reperibilità indicato nel contratto.
+            </p>
+
+            <dl class="contatti-lista">
+                <div><dt>Telefono</dt><dd>{{ azienda.telefono }}</dd></div>
+                <div><dt>Email</dt><dd>{{ azienda.email }}</dd></div>
+                <div><dt>PEC</dt><dd>{{ azienda.pec }}</dd></div>
+                <div><dt>Codice SDI</dt><dd>{{ azienda.codice_sdi }}</dd></div>
+                <div><dt>Sede legale</dt><dd>{{ azienda.sede_legale }}</dd></div>
+                <div><dt>Orari</dt><dd>{{ azienda.orari }}</dd></div>
+            </dl>
+        </section>
+
+    </div>
+
+    <footer>
+        Documento informativo interno — {{ azienda.ragione_sociale }} ·
+        P.IVA {{ azienda.partita_iva }} · REA {{ azienda.rea }}
+    </footer>
+
+    {% if not token %}
+        <script>
+            const form = document.getElementById('login-form');
+            const erroreBox = document.getElementById('errore');
+            const btn = document.getElementById('btn-login');
+
+            function mostraErrore(msg) {
+                erroreBox.textContent = msg;
+                erroreBox.hidden = false;
+                erroreBox.classList.remove('shake');
+                void erroreBox.offsetWidth;
+                erroreBox.classList.add('shake');
+
+                const pwd = document.getElementById('password');
+                pwd.value = '';
+                pwd.focus();
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('errore') === 'sessione') {
+                mostraErrore('Sessione scaduta: effettua di nuovo l\'accesso.');
+            }
+
+            form.addEventListener('submit', async (evento) => {
+                evento.preventDefault();
+                erroreBox.hidden = true;
+                btn.disabled = true;
+                btn.textContent = 'Verifica in corso...';
+
+                try {
+                    const risposta = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: document.getElementById('username').value,
+                            password: document.getElementById('password').value
+                        })
+                    });
+
+                    const dati = await risposta.json();
+
+                    if (dati.success) {
+                        sessionStorage.setItem('token', dati.token);
+                        window.location.href = dati.redirect;
+                    } else {
+                        mostraErrore(dati.messaggio || 'Credenziali non valide.');
+                    }
+                } catch (e) {
+                    mostraErrore('Errore di rete, riprova.');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Accedi';
+                }
+            });
+        </script>
+    {% endif %}
+</body>
+</html>
