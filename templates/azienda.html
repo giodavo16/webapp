@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titolo %}Profilo aziendale — {{ azienda.ragione_sociale }}{% endblock %}
+{% block contenuto %}
+<main class="dashboard">
+  <section class="intestazione">
+    <h1>{{ azienda.ragione_sociale }}</h1>
+    <p>{{ azienda.missione }}</p>
+  </section>
+
+  {% set blocchi = {"numeri": numeri, "storia": storia, "valori": valori,
+                    "servizi": servizi, "team": team, "sostenibilita": sostenibilita,
+                    "certificazioni": certificazioni, "sedi": sedi,
+                    "benefit": benefit, "posizioni": posizioni, "faq": faq} %}
+
+  {% for id_sezione, etichetta in sezioni %}
+    <section class="pannello" id="{{ id_sezione }}">
+      <h2>{{ etichetta }}</h2>
+      {% for voce in blocchi.get(id_sezione, []) %}
+        {% if voce is mapping %}
+          <dl class="voce">
+            {% for chiave, valore in voce.items() %}
+              <dt>{{ chiave|replace("_", " ")|capitalize }}</dt>
+              <dd>{{ valore }}</dd>
+            {% endfor %}
+          </dl>
+        {% else %}
+          <p class="voce">{{ voce }}</p>
+        {% endif %}
+      {% else %}
+        <p class="minore">Nessun contenuto disponibile.</p>
+      {% endfor %}
+    </section>
+  {% endfor %}
+</main>
+{% endblock %}

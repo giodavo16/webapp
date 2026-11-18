@@ -1,414 +1,564 @@
+import hmac
+import io
+import os
 import secrets
 import time
+from datetime import datetime
 from functools import wraps
-from uuid import uuid4
 
+from dotenv import load_dotenv
 from flask import (
-    Flask,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    url_for,
+    Flask, abort, flash, jsonify, redirect, render_template, request,
+    send_file, url_for,
 )
 
 import DB_tool
+import email_tool
+import sicurezza
+from dati import INFO_AZIENDA, SEZIONI_AZIENDA, dati_profilo
+
+load_dotenv()
 
 app = Flask(__name__)
+# MODIFICA 1: niente fallback silenzioso, la chiave deve stare nel .env
+app.secret_key = os.getenv("SECRET_KEY") or secrets.token_hex(32)
+if not os.getenv("SECRET_KEY"):
+    print("ATTENZIONE: SECRET_KEY assente nel .env, uso un valore casuale "
+          "(i token di sessione decadranno a ogni riavvio).")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
-credenziali = {
-    "ciccio": "pasticcio1",
-}
-
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:5000")
 DURATA_TOKEN = 60 * 30
 token_attivi = {}
-compilazioni = {}
 
-INFO_AZIENDA = {
-    "ragione_sociale": "Aurora Tecnologie S.p.A.",
-    "claim": "Infrastrutture digitali che non si fermano mai.",
-    "settore": "Servizi IT, cloud e integrazione di sistemi",
-    "fondazione": "2009",
-    "forma_giuridica": "Società per azioni",
-    "partita_iva": "IT 04829120367",
-    "codice_fiscale": "04829120367",
-    "rea": "MO-418772",
-    "capitale_sociale": "1.250.000 € interamente versato",
-    "dipendenti": "184",
-    "sede_legale": "Via dei Mille 42 — 41121 Modena (MO), Italia",
-    "telefono": "+39 059 412 8877",
-    "email": "info@auroratecnologie.it",
-    "pec": "auroratecnologie@legalmail.it",
-    "codice_sdi": "M5UXCR1",
-    "orari": "Lunedì – Venerdì, 08:30 – 18:30",
-    "descrizione": (
-        "Aurora Tecnologie progetta, migra e presidia infrastrutture critiche per aziende "
-        "manifatturiere, sanitarie e logistiche. Nata nel 2009 come piccolo studio di "
-        "consulenza sistemistica, oggi gestisce ambienti cloud ibridi, reti industriali e "
-        "servizi di continuità operativa per oltre 430 clienti in dodici Paesi."
-    ),
+MIME_IMMAGINI = {
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/gif": b"GIF8",
+    "image/webp": b"RIFF",
 }
 
-SEZIONI_AZIENDA = [
-    ("panoramica", "Panoramica"),
-    ("storia", "Storia"),
-    ("missione", "Missione"),
-    ("valori", "Valori"),
-    ("servizi", "Servizi"),
-    ("numeri", "Numeri"),
-    ("team", "Team"),
-    ("sostenibilita", "Sostenibilità"),
-    ("certificazioni", "Certificazioni"),
-    ("sedi", "Sedi"),
-    ("carriere", "Lavora con noi"),
-    ("faq", "FAQ"),
-    ("contatti", "Contatti"),
-]
 
-NUMERI = [
-    ("184", "Persone in organico"),
-    ("27,4 M€", "Fatturato 2024"),
-    ("99,98%", "Uptime medio dei servizi gestiti"),
-    ("12", "Paesi in cui operiamo"),
-    ("430+", "Clienti attivi"),
-    ("16", "Anni di attività"),
-]
-
-STORIA = [
-    {"anno": "2009", "titolo": "Fondazione",
-     "testo": "Tre sistemisti e un furgone di rack usati: Aurora nasce in un garage di Modena "
-              "con i primi contratti di assistenza per PMI manifatturiere."},
-    {"anno": "2012", "titolo": "Primo data center proprietario",
-     "testo": "Entra in funzione la sala CED di 240 m² con gruppi di continuità ridondati N+1 "
-              "e collegamento in fibra dedicata."},
-    {"anno": "2015", "titolo": "ISO/IEC 27001",
-     "testo": "Certifichiamo il sistema di gestione della sicurezza delle informazioni e "
-              "apriamo la divisione dedicata alla compliance."},
-    {"anno": "2018", "titolo": "Espansione europea",
-     "testo": "Apre la sede di Lubiana; i servizi gestiti superano per la prima volta i "
-              "confini nazionali con contratti in Slovenia, Austria e Croazia."},
-    {"anno": "2021", "titolo": "Piattaforma Aurora Cloud",
-     "testo": "Rilasciamo la piattaforma interna di orchestrazione multi-cloud, oggi usata da "
-              "oltre 200 clienti per il provisioning self-service."},
-    {"anno": "2023", "titolo": "Divisione sicurezza",
-     "testo": "Nasce l'unità SOC con copertura 24/7 e servizi di threat hunting e risposta "
-              "agli incidenti."},
-    {"anno": "2025", "titolo": "184 persone, 12 Paesi",
-     "testo": "Chiusura del bilancio a 27,4 milioni di euro e apertura del polo di ricerca su "
-              "edge computing e reti industriali."},
-]
-
-VALORI = [
-    ("Affidabilità", "Un fermo macchina costa più di qualsiasi licenza: progettiamo per la "
-                     "ridondanza, non per il risparmio apparente."),
-    ("Trasparenza", "Preventivi a corpo, nessun costo nascosto, report mensile con ore e "
-                    "attività tracciate."),
-    ("Competenza artigiana", "Team piccoli e stabili: il cliente parla sempre con chi mette "
-                             "le mani sull'infrastruttura."),
-    ("Sicurezza by design", "La postura di sicurezza si progetta in fase di architettura, "
-                            "non si rattoppa dopo l'incidente."),
-    ("Indipendenza tecnologica", "Nessuna esclusiva di vendor: scegliamo lo stack in base al "
-                                 "problema, non al margine."),
-    ("Continuità umana", "Formazione continua e turni sostenibili: nessuno in reperibilità per "
-                         "30 giorni di fila."),
-]
-
-SERVIZI = [
-    {"titolo": "Cloud e ambienti ibridi", "testo":
-        "Migrazione, gestione e ottimizzazione di ambienti multi-cloud con orchestrazione "
-        "automatica e cost governance.",
-     "voci": ["Assessment e piano di migrazione", "Landing zone e IaC", "FinOps e controllo costi"]},
-    {"titolo": "Infrastrutture critiche", "testo":
-        "Progettazione di data center, ridondanza di rete e sistemi di continuità operativa "
-        "con obiettivi di RTO/RPO contrattualizzati.",
-     "voci": ["Sala CED e power design", "Disaster recovery testato due volte l'anno", "Reperibilità 24/7"]},
-    {"titolo": "Cybersecurity e SOC", "testo":
-        "Monitoraggio continuo, threat hunting e risposta agli incidenti da centro operativo di "
-        "sicurezza con copertura integrale.",
-     "voci": ["SIEM e correlazione log", "Endpoint detection & response", "Incident response e forensics"]},
-    {"titolo": "Reti industriali e OT", "testo":
-        "Segmentazione di reti di fabbrica, integrazione PLC/SCADA e connettività deterministica "
-        "per linee produttive.",
-     "voci": ["Segmentazione IT/OT", "Telemetria di linea", "Edge computing e raccolta dati"]},
-    {"titolo": "Integrazione applicativa", "testo":
-        "API gateway, middleware e automazione dei processi tra gestionali, MES e piattaforme di "
-        "terze parti.",
-     "voci": ["API management", "ETL e data integration", "Automazione RPA"]},
-    {"titolo": "Gestione e supporto", "testo":
-        "Servizi gestiti con SLA da 1 ora, monitoraggio proattivo e service desk con referente "
-        "tecnico dedicato.",
-     "voci": ["SLA 1h / 4h / NBD", "Monitoraggio proattivo", "Service desk italiano"]},
-]
-
-TEAM = [
-    ("Elena Ruggeri", "Amministratrice delegata",
-     "In Aurora dal 2011, guida la strategia e lo sviluppo internazionale."),
-    ("Marco Bellini", "Direttore tecnico",
-     "Co-fondatore, architetto delle piattaforme di continuità operativa."),
-    ("Sara Nocentini", "Responsabile sicurezza",
-     "Costruisce il SOC e i processi di incident response."),
-    ("Davide Ferraro", "Responsabile cloud",
-     "Coordina le migrazioni e i team di platform engineering."),
-    ("Giulia Pavesi", "Direttrice amministrativa",
-     "Bilancio, controllo di gestione e rapporti con gli istituti di credito."),
-    ("Andrea Costa", "Responsabile persone",
-     "Selezione, formazione e politiche di benessere interno."),
-]
-
-SOSTENIBILITA = [
-    ("-62%", "Emissioni Scope 1 e 2 rispetto al 2019"),
-    ("100%", "Energia da fonti rinnovabili certificate GO"),
-    ("PUE 1,28", "Efficienza media del data center di Modena"),
-]
-
-CERTIFICAZIONI = [
-    ("ISO/IEC 27001:2022", "Sicurezza delle informazioni", "dal 2015"),
-    ("ISO 9001:2015", "Sistema di gestione della qualità", "dal 2012"),
-    ("ISO 14001:2015", "Gestione ambientale", "dal 2019"),
-    ("ISO 22301:2019", "Continuità operativa", "dal 2021"),
-    ("SOC 2 Type II", "Controlli su sicurezza e disponibilità", "dal 2022"),
-]
-
-SEDI = [
-    ("Modena", "Sede legale e data center", "Via dei Mille 42, 41121 Modena (MO)", "Italia"),
-    ("Milano", "Ufficio commerciale", "Via Tortona 27, 20144 Milano (MI)", "Italia"),
-    ("Bologna", "Polo ricerca e sviluppo", "Via Stalingrado 71, 40128 Bologna (BO)", "Italia"),
-    ("Lubiana", "Filiale estera", "Dunajska cesta 156, 1000 Lubiana", "Slovenia"),
-]
-
-BENEFIT = [
-    "Contratto a tempo indeterminato con CCNL Commercio, terzo livello o superiore",
-    "Buoni pasto da 8 € e welfare aziendale fino a 800 € annui",
-    "Formazione certificata pagata e 40 ore annue di studio retribuito",
-    "Smart working ibrido fino a 3 giorni a settimana",
-    "Reperibilità volontaria con indennizzo e recupero garantito",
-    "Fondo sanitario integrativo esteso al nucleo familiare",
-]
-
-POSIZIONI = [
-    ("System Engineer Linux", "Modena · Ibrido",
-     "Gestione di cluster Kubernetes e automazione infrastrutturale."),
-    ("Analista SOC (turni)", "Bologna · In sede",
-     "Monitoraggio, triage e risposta a incidenti su infrastrutture critiche."),
-    ("Network Engineer OT", "Modena · Trasferte 20%",
-     "Segmentazione di reti industriali e integrazione PLC/SCADA."),
-    ("Developer Python", "Milano · Ibrido",
-     "Sviluppo di tooling interno per la piattaforma Aurora Cloud."),
-]
-
-FAQ = [
-    ("Con quali clienti lavorate?",
-     "Per il 68% PMI manifatturiere con 50-500 dipendenti, per il 21% strutture sanitarie e "
-     "società di logistica, per l'11% enti pubblici e università."),
-    ("Qual è la dimensione media di un progetto?",
-     "Gli interventi di migrazione e infrastruttura si collocano tra 40.000 e 600.000 €, con "
-     "contratti di gestione pluriennali a partire da 1.800 € al mese."),
-    ("Lavorate solo in Italia?",
-     "No. La sede legale e il data center primario sono a Modena, ma operiamo in dodici Paesi "
-     "con filiale diretta a Lubiana e partner certificati in Austria, Croazia e Ungheria."),
-    ("Come gestite i dati dei clienti?",
-     "Tutti i dati restano su infrastrutture in UE, con cifratura at rest e in transito, "
-     "classificazione documentale e registro dei trattamenti aggiornato."),
-    ("Offrite ambienti di test?",
-     "Sì: ogni progetto include un ambiente di staging identico alla produzione e un piano di "
-     "collaudo con test di ripristino documentati."),
-    ("Come si avvia una collaborazione?",
-     "Primo incontro conoscitivo gratuito, assessment di 5 giorni lavorativi, poi preventivo a "
-     "corpo con tempi e responsabilità definite."),
-]
+# ---------------- CONTESTO TEMPLATE ----------------
 
 @app.context_processor
-def inietta_dati_azienda():
-    """Rende i dati del profilo aziendale disponibili in ogni template."""
+def inietta_contesto():
+    token = token_corrente()
+    sessione = leggi_token(token)
     return {
         "azienda": INFO_AZIENDA,
         "sezioni": SEZIONI_AZIENDA,
-        "numeri": NUMERI,
-        "storia": STORIA,
-        "valori": VALORI,
-        "servizi": SERVIZI,
-        "team": TEAM,
-        "sostenibilita": SOSTENIBILITA,
-        "certificazioni": CERTIFICAZIONI,
-        "sedi": SEDI,
-        "benefit": BENEFIT,
-        "posizioni": POSIZIONI,
-        "faq": FAQ,
+        "csrf_token": sessione["csrf"] if sessione else "",
+        "token": token,
+        "username": sessione["nome"] if sessione else None,
+        "ruolo": sessione["ruolo"] if sessione else None,
+        "e_gestore": bool(sessione and sessione["ruolo"] == "gestore"),
+        **dati_profilo(),
     }
 
-#  AUTENTICAZIONE
 
-def genera_token(username):
+# ---------------- AUTENTICAZIONE ----------------
+
+def token_corrente():
+    return (
+        request.args.get("token")
+        or request.form.get("token")
+        or request.cookies.get("token")
+    )
+
+
+def genera_token(utente):
     token = secrets.token_urlsafe(32)
-
     token_attivi[token] = {
-        "username": username,
+        "utente_id": utente["id"],
+        "nome": utente["nome"],
+        "ruolo": utente["ruolo"],
+        "csrf": secrets.token_urlsafe(24),
         "scadenza": time.time() + DURATA_TOKEN,
     }
-
     return token
 
+
 def leggi_token(token):
-    if not token:
-        return None
-
-    dati = token_attivi.get(token)
-
+    dati = token_attivi.get(token) if token else None
     if dati is None:
         return None
-
     if dati["scadenza"] < time.time():
         token_attivi.pop(token, None)
         return None
-
     return dati
+
+
+def sessione_valida():
+    return leggi_token(token_corrente())
+
 
 def token_richiesto(funzione):
     @wraps(funzione)
     def wrapper(*args, **kwargs):
-        token = (
-            request.args.get("token")
-            or request.form.get("token")
-        )
-
-        if leggi_token(token) is None:
-            return redirect(url_for("login", errore="sessione"))
-
+        if sessione_valida() is None:
+            flash("Sessione scaduta o assente: effettua l'accesso.", "errore")
+            return redirect(url_for("login"))
         return funzione(*args, **kwargs)
 
     return wrapper
 
+
+def gestore_richiesto(funzione):
+    """Secondo livello: oltre al token serve il ruolo gestore."""
+    @wraps(funzione)
+    def wrapper(*args, **kwargs):
+        sessione = sessione_valida()
+        if sessione is None:
+            flash("Sessione scaduta o assente: effettua l'accesso.", "errore")
+            return redirect(url_for("login"))
+        if sessione["ruolo"] != "gestore":
+            abort(403)
+        return funzione(*args, **kwargs)
+
+    return wrapper
+
+
+def csrf_richiesto(funzione):
+    """MODIFICA 2: i metodi senza corpo non hanno un form da cui leggere il token."""
+    @wraps(funzione)
+    def wrapper(*args, **kwargs):
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return funzione(*args, **kwargs)
+        sessione = sessione_valida()
+        inviato = request.form.get("csrf") or request.headers.get("X-CSRF", "")
+        if sessione and not hmac.compare_digest(inviato, sessione["csrf"]):
+            abort(400, "Token CSRF mancante o non valido.")
+        return funzione(*args, **kwargs)
+
+    return wrapper
+
+
+# ---------------- PAGINE PUBBLICHE ----------------
+
 @app.route("/")
 def index():
-    return redirect(url_for("login"))
+    return redirect(url_for("dashboard") if sessione_valida() else url_for("login"))
 
-@app.route("/login", methods=["GET"])
+
+@app.route("/login")
 def login():
-    # token=None -> la card di accesso viene mostrata
-    return render_template(
-        "login.html",
-        token=None,
-        username=None,
-        errore=request.args.get("errore"),
-    )
+    if sessione_valida():
+        return redirect(url_for("dashboard"))
+    return render_template("login.html", errore=request.args.get("errore"))
+
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
     dati = request.get_json(silent=True) or request.form
-
-    username = (dati.get("username") or "").strip()
+    email = (dati.get("email") or "").strip().lower()
     password = dati.get("password") or ""
 
-    if credenziali.get(username) != password:
-        return jsonify({
-            "success": False,
-            "messaggio": "Username o password errati.",
-        }), 401
+    utente = DB_tool.utente_per_email(email)
+    if utente is None or not sicurezza.verifica_password(password, utente["password_hash"]):
+        if utente:
+            DB_tool.registra_accesso(utente["id"], fallito=True)
+        return jsonify({"success": False,
+                        "messaggio": "Email o password errati."}), 401
 
-    token = genera_token(username)
+    # MODIFICA 3: NOW() del database è in fuso locale, non in UTC
+    if utente["bloccato_fino"] and utente["bloccato_fino"] > datetime.now():
+        return jsonify({"success": False,
+                        "messaggio": "Troppi tentativi: riprova tra qualche minuto."}), 429
 
-    return jsonify({
-        "success": True,
-        "token": token,
-        "redirect": url_for("dashboard", token=token),
-    }), 200
+    if not utente["is_verified"]:
+        return jsonify({"success": False,
+                        "messaggio": "Account non attivo: conferma l'indirizzo email."}), 403
 
-@app.route("/logout", methods=["GET", "POST"])
+    DB_tool.registra_accesso(utente["id"], fallito=False)
+    token = genera_token(utente)
+    risposta = jsonify({"success": True, "redirect": url_for("dashboard")})
+    risposta.set_cookie("token", token, httponly=True, samesite="Lax",
+                        max_age=DURATA_TOKEN)
+    return risposta
+
+
+@app.route("/logout")
 def logout():
-    token = (
-        request.args.get("token")
-        or request.form.get("token")
-    )
-
+    token = token_corrente()
     if token:
         token_attivi.pop(token, None)
-
-    return redirect(url_for("login"))
-
-@app.route("/form", methods=["GET"])
-@token_richiesto
-def mostra_form():
-    token = request.args.get("token")
-
-    return render_template("form.html", token=token)
+    risposta = redirect(url_for("login"))
+    risposta.delete_cookie("token")
+    return risposta
 
 
-@app.route("/dashboard", methods=["GET"])
-@token_richiesto
-def dashboard():
+# ---------------- REGISTRAZIONE ----------------
 
-    token = request.args.get("token") or request.form.get("token")
+@app.route("/registrazione", methods=["GET", "POST"])
+def registrazione():
+    if request.method == "GET":
+        return render_template("registrazione.html")
 
-    ricerca = request.args.get("q", "").strip()
+    nome = (request.form.get("nome") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    conferma = request.form.get("conferma") or ""
 
-    if ricerca:
-        risultati = DB_tool.cerca_prodotti(ricerca)
-    else:
-        risultati = DB_tool.visualizza_prodotti()
+    errori = []
+    if len(nome) < 3:
+        errori.append("Il nome deve contenere almeno 3 caratteri.")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        errori.append("Indirizzo email non valido.")
+    if len(password) < 8:
+        errori.append("La password deve contenere almeno 8 caratteri.")
+    if password != conferma:
+        errori.append("Le due password non coincidono.")
+    if DB_tool.utente_per_email(email):
+        errori.append("Questa email è già registrata.")
 
-    return render_template(
-        "dashboard.html",
-        token=token,
-        username=leggi_token(token)["username"],
-        prodotti=risultati,
-        ricerca=ricerca,
+    if errori:
+        for errore in errori:
+            flash(errore, "errore")
+        return render_template("registrazione.html", nome=nome, email=email), 400
+
+    token_verifica = sicurezza.genera_token_verifica()
+    nuovo_id = DB_tool.crea_utente(
+        nome, email, sicurezza.genera_hash(password), sicurezza.sha256(token_verifica)
     )
+    if nuovo_id is None:
+        flash("Registrazione non riuscita, riprova.", "errore")
+        return render_template("registrazione.html", nome=nome, email=email), 500
+
+    link = f"{BASE_URL}/conferma/{token_verifica}"
+    if not email_tool.send_verification_email(email, link):
+        flash("Account creato, ma la mail non è partita: controlla la configurazione SMTP.", "errore")
+
+    DB_tool.log(nuovo_id, "registrazione", "utenti", nuovo_id, email)
+    return redirect(url_for("conferma_inviata", email=email))
 
 
-@app.route("/azienda", methods=["GET"])
+@app.route("/registrazione/inviata")
+def conferma_inviata():
+    return render_template("conferma.html", email=request.args.get("email"))
+
+
+@app.route("/conferma/<token>")
+def conferma_account(token):
+    attivato = DB_tool.verifica_utente(sicurezza.sha256(token))
+    return render_template("conferma.html", attivato=attivato)
+
+
+# ---------------- PROFILO AZIENDALE ----------------
+
+@app.route("/azienda")
 @token_richiesto
 def azienda():
-    """Profilo aziendale completo, con le sezioni navigabili dalla navbar.
+    return render_template("azienda.html", sezioni_locali=True)
 
-    Usa lo stesso template del login: la card di accesso viene nascosta
-    perché qui il token è presente.
-    """
-    token = request.args.get("token") or request.form.get("token")
 
-    return render_template(
-        "login.html",
-        token=token,
-        username=leggi_token(token)["username"],
-        errore=None,
-    )
+# ---------------- DASHBOARD (entrambi i ruoli) ----------------
 
-@app.route("/submit", methods=["POST"])
+@app.route("/dashboard")
 @token_richiesto
-def submit_form():
-    nome = request.form.get("nome", "").strip()
-    data = request.form.get("data", "")
-    genere = request.form.get("genere", "")
-    newsletter = request.form.get("newsletter") == "on"
-
-    compilazione_id = str(uuid4())
-
-    compilazioni[compilazione_id] = {
-        "nome": nome,
-        "data": data,
-        "genere": genere,
-        "newsletter": newsletter,
-    }
-
-    return redirect(
-        url_for("riepilogo", compilazione_id=compilazione_id),
-        code=303,
+def dashboard():
+    ricerca = request.args.get("q", "").strip()
+    categoria = request.args.get("categoria", type=int)
+    return render_template(
+        "dashboard.html",
+        prodotti=DB_tool.visualizza_prodotti(ricerca or None, categoria),
+        categorie=DB_tool.elenco_categorie(),
+        ricerca=ricerca,
+        categoria_scelta=categoria,
     )
 
-@app.route("/riepilogo/<compilazione_id>", methods=["GET"])
-def riepilogo(compilazione_id):
-    dati = compilazioni.get(compilazione_id)
 
-    if dati is None:
-        return jsonify({
-            "success": False,
-            "messaggio": "Compilazione non trovata",
-        }), 404
+@app.route("/prodotto/<int:prodotto_id>")
+@token_richiesto
+def prodotto(prodotto_id):
+    scheda = DB_tool.prodotto_per_id(prodotto_id)
+    if scheda is None:
+        abort(404)
+    sessione = sessione_valida()
+    return render_template(
+        "prodotto.html",
+        prodotto=scheda,
+        voti=DB_tool.voti_prodotto(prodotto_id),
+        mio_voto=DB_tool.voto_utente(sessione["utente_id"], prodotto_id),
+    )
 
-    return jsonify({
-        "success": True,
-        "messaggio": "Form compilato correttamente",
-        "dati": dati,
-    }), 200
+
+@app.route("/prodotto/<int:prodotto_id>/vota", methods=["POST"])
+@token_richiesto
+@csrf_richiesto
+def vota(prodotto_id):
+    sessione = sessione_valida()
+    stelle = request.form.get("stelle", type=int)
+    commento = (request.form.get("commento") or "").strip()
+
+    if stelle is None or not 1 <= stelle <= 5:
+        flash("Seleziona un voto da 1 a 5 stelle.", "errore")
+        return redirect(url_for("prodotto", prodotto_id=prodotto_id))
+
+    DB_tool.salva_voto(sessione["utente_id"], prodotto_id, stelle, commento)
+    DB_tool.log(sessione["utente_id"], "voto", "prodotti", prodotto_id, f"{stelle}/5")
+    flash("Voto registrato.", "ok")
+    return redirect(url_for("prodotto", prodotto_id=prodotto_id))
+
+
+@app.route("/prodotto/<int:prodotto_id>/voto/elimina", methods=["POST"])
+@token_richiesto
+@csrf_richiesto
+def elimina_voto(prodotto_id):
+    sessione = sessione_valida()
+    DB_tool.elimina_voto(sessione["utente_id"], prodotto_id)
+    DB_tool.log(sessione["utente_id"], "elimina_voto", "prodotti", prodotto_id)
+    flash("Voto rimosso.", "ok")
+    return redirect(url_for("prodotto", prodotto_id=prodotto_id))
+
+
+# ---------------- PROFILO PERSONALE (1:1) ----------------
+
+@app.route("/profilo", methods=["GET", "POST"])
+@token_richiesto
+@csrf_richiesto
+def profilo():
+    sessione = sessione_valida()
+
+    if request.method == "POST":
+        immagine, errore = leggi_immagine()
+        if errore:
+            flash(errore, "errore")
+            return redirect(url_for("profilo"))
+
+        avatar_id = None
+        if immagine:
+            avatar_id = DB_tool.salva_immagine(*immagine, sessione["utente_id"])
+
+        DB_tool.salva_profilo(
+            sessione["utente_id"],
+            (request.form.get("telefono") or "").strip(),
+            (request.form.get("citta") or "").strip(),
+            (request.form.get("bio") or "").strip(),
+            avatar_id,
+        )
+        DB_tool.log(sessione["utente_id"], "profilo", "profili", sessione["utente_id"])
+        flash("Profilo aggiornato.", "ok")
+        return redirect(url_for("profilo"))
+
+    return render_template("profilo.html", utente=DB_tool.utente_per_id(sessione["utente_id"]))
+
+
+# ---------------- AREA GESTORE ----------------
+
+@app.route("/gestione")
+@gestore_richiesto
+def gestione():
+    return render_template(
+        "gestione.html",
+        prodotti=DB_tool.visualizza_prodotti(),
+        utenti=DB_tool.elenco_utenti(),
+        statistiche=DB_tool.statistiche(),
+        log=DB_tool.ultimi_log(),
+    )
+
+
+@app.route("/gestione/prodotti/nuovo", methods=["GET", "POST"])
+@gestore_richiesto
+@csrf_richiesto
+def nuovo_prodotto():
+    if request.method == "GET":
+        # MODIFICA 4a
+        return render_template("prodotto_form.html", prodotto=None,
+                               categorie=DB_tool.elenco_categorie(),
+                               tag_disponibili=DB_tool.elenco_tag(),
+                               tag_scelti=[])
+
+    errore = _salva_prodotto(None)
+    if errore:
+        flash(errore, "errore")
+        return redirect(url_for("nuovo_prodotto"))
+
+    flash("Prodotto creato.", "ok")
+    return redirect(url_for("gestione"))
+
+
+@app.route("/gestione/prodotti/<int:prodotto_id>/modifica", methods=["GET", "POST"])
+@gestore_richiesto
+@csrf_richiesto
+def modifica_prodotto(prodotto_id):
+    scheda = DB_tool.prodotto_per_id(prodotto_id)
+    if scheda is None:
+        abort(404)
+
+    if request.method == "GET":
+        # MODIFICA 4b
+        return render_template("prodotto_form.html", prodotto=scheda,
+                               categorie=DB_tool.elenco_categorie(),
+                               tag_disponibili=DB_tool.elenco_tag(),
+                               tag_scelti=[t["nome"] for t in DB_tool.tag_prodotto(prodotto_id)])
+
+    errore = _salva_prodotto(prodotto_id)
+    if errore:
+        flash(errore, "errore")
+        return redirect(url_for("modifica_prodotto", prodotto_id=prodotto_id))
+
+    flash("Prodotto aggiornato.", "ok")
+    return redirect(url_for("gestione"))
+
+
+@app.route("/gestione/prodotti/<int:prodotto_id>/elimina", methods=["POST"])
+@gestore_richiesto
+@csrf_richiesto
+def elimina_prodotto(prodotto_id):
+    scheda = DB_tool.prodotto_per_id(prodotto_id)
+    if scheda is None:
+        abort(404)
+
+    DB_tool.elimina_prodotto(prodotto_id)
+    if scheda["immagine_id"]:
+        DB_tool.elimina_immagine(scheda["immagine_id"])
+    DB_tool.log(sessione_valida()["utente_id"], "eliminazione", "prodotti",
+                prodotto_id, scheda["nome"])
+    flash("Prodotto eliminato.", "ok")
+    return redirect(url_for("gestione"))
+
+
+@app.route("/gestione/utenti/<int:utente_id>/ruolo", methods=["POST"])
+@gestore_richiesto
+@csrf_richiesto
+def cambia_ruolo(utente_id):
+    ruolo = request.form.get("ruolo")
+    if ruolo not in ("base", "gestore"):
+        abort(400)
+
+    if utente_id == sessione_valida()["utente_id"] and ruolo == "base":
+        flash("Non puoi togliere il ruolo a te stesso mentre sei collegato.", "errore")
+        return redirect(url_for("gestione"))
+
+    DB_tool.cambia_ruolo(utente_id, ruolo)
+    DB_tool.log(sessione_valida()["utente_id"], "ruolo", "utenti", utente_id, ruolo)
+    flash("Ruolo aggiornato.", "ok")
+    return redirect(url_for("gestione"))
+
+
+@app.route("/gestione/utenti/<int:utente_id>/elimina", methods=["POST"])
+@gestore_richiesto
+@csrf_richiesto
+def elimina_utente(utente_id):
+    if utente_id == sessione_valida()["utente_id"]:
+        flash("Non puoi eliminare il tuo stesso account.", "errore")
+        return redirect(url_for("gestione"))
+
+    # MODIFICA 5: non restare senza gestori
+    utente = DB_tool.utente_per_id(utente_id)
+    if utente and utente["ruolo"] == "gestore" and DB_tool.conta_gestori() <= 1:
+        flash("È l'unico gestore: promuovine un altro prima di eliminarlo.", "errore")
+        return redirect(url_for("gestione"))
+
+    DB_tool.elimina_utente(utente_id)
+    DB_tool.log(sessione_valida()["utente_id"], "eliminazione", "utenti", utente_id,
+                utente["email"] if utente else "")
+    flash("Utente eliminato.", "ok")
+    return redirect(url_for("gestione"))
+
+
+# ---------------- SERVIZIO IMMAGINI ----------------
+
+@app.route("/immagine/<int:immagine_id>")
+@token_richiesto
+def immagine(immagine_id):
+    riga = DB_tool.immagine_per_id(immagine_id)
+    if riga is None:
+        abort(404)
+    return send_file(io.BytesIO(riga["dati"]), mimetype=riga["mime"], max_age=86400)
+
+
+# ---------------- SUPPORTO ----------------
+
+def leggi_immagine(campo="immagine"):
+    file = request.files.get(campo)
+    if file is None or not file.filename:
+        return None, None
+
+    mime = file.mimetype
+    if mime not in MIME_IMMAGINI:
+        return None, "Formato non supportato: usa PNG, JPEG, GIF o WEBP."
+
+    contenuto = file.read()
+    if len(contenuto) > 3 * 1024 * 1024:
+        return None, "Immagine troppo grande (massimo 3 MB)."
+    if not contenuto.startswith(MIME_IMMAGINI[mime]):
+        return None, "Il contenuto del file non corrisponde al formato dichiarato."
+    if mime == "image/webp" and contenuto[8:12] != b"WEBP":
+        return None, "File WEBP non valido."
+
+    return (file.filename, mime, contenuto), None
+
+
+def _salva_prodotto(prodotto_id):
+    nome = (request.form.get("nome") or "").strip()
+    descrizione = (request.form.get("descrizione") or "").strip()
+    prezzo = request.form.get("prezzo", type=float)
+    categoria_id = request.form.get("categoria_id", type=int)
+    sessione = sessione_valida()
+
+    if len(nome) < 2:
+        return "Il nome del prodotto è troppo corto."
+    if prezzo is None or prezzo < 0:
+        return "Prezzo non valido."
+    if categoria_id is None:
+        return "Seleziona una categoria."
+
+    immagine, errore = leggi_immagine()
+    if errore:
+        return errore
+
+    immagine_id = None
+    if immagine:
+        immagine_id = DB_tool.salva_immagine(*immagine, sessione["utente_id"])
+
+    # MODIFICA 6: la relazione N:M si riscrive a ogni salvataggio
+    tag = request.form.getlist("tag")
+
+    if prodotto_id is None:
+        nuovo = DB_tool.crea_prodotto(nome, descrizione, prezzo, categoria_id,
+                                      immagine_id, sessione["utente_id"])
+        DB_tool.salva_tag_prodotto(nuovo, tag)
+        DB_tool.log(sessione["utente_id"], "creazione", "prodotti", nuovo, nome)
+    else:
+        DB_tool.aggiorna_prodotto(prodotto_id, nome, descrizione, prezzo,
+                                  categoria_id, immagine_id)
+        DB_tool.salva_tag_prodotto(prodotto_id, tag)
+        DB_tool.log(sessione["utente_id"], "modifica", "prodotti", prodotto_id, nome)
+
+    return None
+
+
+@app.errorhandler(403)
+def errore_403(_):
+    return render_template("errore.html", codice=403,
+                           titolo="Accesso negato",
+                           testo="Questa sezione è riservata agli utenti gestori."), 403
+
+
+@app.errorhandler(404)
+def errore_404(_):
+    return render_template("errore.html", codice=404,
+                           titolo="Pagina non trovata",
+                           testo="L'indirizzo richiesto non esiste."), 404
+
+
+@app.errorhandler(413)
+def errore_413(_):
+    return render_template("errore.html", codice=413,
+                           titolo="File troppo grande",
+                           testo="Il caricamento supera il limite di 5 MB."), 413
+
+
+@app.errorhandler(400)
+def errore_400(errore):
+    return render_template("errore.html", codice=400,
+                           titolo="Richiesta non valida",
+                           testo=getattr(errore, "description", "Dati mancanti o corrotti.")), 400
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host=os.getenv("HOST", "127.0.0.1"),
+            port=int(os.getenv("PORT", "5000")),
+            debug=True)

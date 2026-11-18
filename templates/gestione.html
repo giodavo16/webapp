@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block titolo %}Area gestore{% endblock %}
+{% block contenuto %}
+<main class="dashboard">
+  <section class="intestazione">
+    <h1>Area gestore</h1>
+    <p>Operazioni CRUD su prodotti e utenti, con tracciamento delle attività.</p>
+  </section>
+
+  <section class="riepilogo">
+    {% for etichetta, chiave in [("Prodotti", "prodotti"), ("Categorie", "categorie"),
+                                 ("Utenti", "utenti"), ("Voti", "voti"),
+                                 ("Immagini", "immagini")] %}
+      <div class="statistica">
+        <div class="numero">{{ statistiche[chiave] or 0 }}</div>
+        <div class="descrizione">{{ etichetta }}</div>
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="pannello">
+    <div class="testata-pannello">
+      <h2>Prodotti</h2>
+      <a class="bottone" href="{{ url_for('nuovo_prodotto') }}">Nuovo prodotto</a>
+    </div>
+    <div class="tabella-wrapper">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Nome</th><th>Categoria</th><th>Prezzo</th>
+              <th>Voti</th><th>Azioni</th></tr>
+        </thead>
+        <tbody>
+          {% for p in prodotti %}
+            <tr>
+              <td>{{ p.id }}</td>
+              <td>{{ p.nome }}</td>
+              <td>{{ p.categoria }}</td>
+              <td>{{ "%.2f"|format(p.prezzo) }} €</td>
+              <td>{{ p.voti }}</td>
+              <td class="azioni-riga">
+                <a class="minore" href="{{ url_for('prodotto', prodotto_id=p.id) }}">Vedi</a>
+                <a class="minore" href="{{ url_for('modifica_prodotto', prodotto_id=p.id) }}">Modifica</a>
+                <form method="POST" action="{{ url_for('elimina_prodotto', prodotto_id=p.id) }}"
+                      class="elimina" data-nome="{{ p.nome }}">
+                  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                  <button type="submit" class="pericolo">Elimina</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">Nessun prodotto.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="pannello">
+    <h2>Utenti</h2>
+    <div class="tabella-wrapper">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Nome</th><th>Email</th><th>Ruolo</th>
+              <th>Attivo</th><th>Voti</th><th>Azioni</th></tr>
+        </thead>
+        <tbody>
+          {% for u in utenti %}
+            <tr>
+              <td>{{ u.id }}</td>
+              <td>{{ u.nome }}</td>
+              <td>{{ u.email }}</td>
+              <td><span class="badge {{ u.ruolo }}">{{ u.ruolo }}</span></td>
+              <td>{{ "sì" if u.is_verified else "no" }}</td>
+              <td>{{ u.voti }}</td>
+              <td class="azioni-riga">
+                <form method="POST" action="{{ url_for('cambia_ruolo', utente_id=u.id) }}">
+                  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                  <input type="hidden" name="ruolo"
+                         value="{{ 'base' if u.ruolo == 'gestore' else 'gestore' }}">
+                  <button type="submit" class="minore">
+                    {{ "Rendi base" if u.ruolo == "gestore" else "Rendi gestore" }}
+                  </button>
+                </form>
+                <form method="POST" action="{{ url_for('elimina_utente', utente_id=u.id) }}"
+                      class="elimina" data-nome="{{ u.email }}">
+                  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                  <button type="submit" class="pericolo">Elimina</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">Nessun utente.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="pannello">
+    <h2>Ultime attività</h2>
+    <div class="tabella-wrapper">
+      <table>
+        <thead>
+          <tr><th>Quando</th><th>Utente</th><th>Azione</th><th>Entità</th><th>Dettaglio</th></tr>
+        </thead>
+        <tbody>
+          {% for l in log %}
+            <tr>
+              <td>{{ l.creato_il }}</td>
+              <td>{{ l.nome or "—" }}</td>
+              <td>{{ l.azione }}</td>
+              <td>{{ l.entita }}{% if l.entita_id %} #{{ l.entita_id }}{% endif %}</td>
+              <td>{{ l.dettaglio }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5">Nessuna attività.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

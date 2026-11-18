@@ -1,0 +1,40 @@
+<header class="navbar">
+  <div class="nav-inner">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <img class="logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="">
+      <span>
+        <strong>{{ azienda.ragione_sociale }}</strong>
+        <small>Catalogo interno</small>
+      </span>
+    </a>
+
+    <nav class="nav-link">
+      {% if sezioni_locali %}
+        {% for id_sezione, etichetta in sezioni %}
+          <a href="#{{ id_sezione }}">{{ etichetta }}</a>
+        {% endfor %}
+      {% else %}
+        <a href="{{ url_for('dashboard') }}">Catalogo</a>
+        <a href="{{ url_for('azienda') }}">Profilo aziendale</a>
+        {% if e_gestore %}
+          <a class="evidenza" href="{{ url_for('gestione') }}">Area gestore</a>
+        {% endif %}
+      {% endif %}
+    </nav>
+
+    <div class="nav-azioni">
+      {% if username %}
+        <span class="utente">{{ username }}
+          <em class="badge {{ ruolo }}">{{ ruolo }}</em>
+        </span>
+        <a href="{{ url_for('profilo') }}">Profilo</a>
+        <a class="esci" href="{{ url_for('logout') }}">Esci</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">Accedi</a>
+        <a href="{{ url_for('registrazione') }}">Registrati</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<button class="torna-su" id="torna-su" title="Torna su">↑</button>

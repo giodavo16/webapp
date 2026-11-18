@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titolo %}Il mio profilo{% endblock %}
+{% block contenuto %}
+<main class="dashboard">
+  <section class="intestazione">
+    <h1>Il mio profilo</h1>
+    <p>Relazione 1:1 con la tabella <code>profili</code>. L'email non è modificabile da qui.</p>
+  </section>
+
+  <section class="pannello">
+    {% if utente and utente.avatar_id %}
+      <img src="{{ url_for('immagine', immagine_id=utente.avatar_id) }}"
+           alt="Avatar" style="width:120px;height:120px;object-fit:cover;border-radius:50%;margin-bottom:16px">
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('profilo') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+      <p class="minore">Account: <strong>{{ utente.nome }}</strong> — {{ utente.email }}
+        <span class="badge {{ utente.ruolo }}">{{ utente.ruolo }}</span></p>
+
+      <div class="campo">
+        <label for="telefono">Telefono</label>
+        <input type="text" id="telefono" name="telefono" maxlength="30"
+               value="{{ utente.telefono or '' if utente else '' }}">
+      </div>
+
+      <div class="campo">
+        <label for="citta">Città</label>
+        <input type="text" id="citta" name="citta" maxlength="80"
+               value="{{ utente.citta or '' if utente else '' }}">
+      </div>
+
+      <div class="campo">
+        <label for="bio">Presentazione</label>
+        <textarea id="bio" name="bio" rows="3" maxlength="400">{{ utente.bio or '' if utente else '' }}</textarea>
+      </div>
+
+      <div class="campo">
+        <label for="immagine">Immagine avatar</label>
+        <input type="file" id="immagine" name="immagine"
+               accept="image/png,image/jpeg,image/gif,image/webp">
+      </div>
+
+      <button type="submit">Salva profilo</button>
+    </form>
+  </section>
+</main>
+{% endblock %}

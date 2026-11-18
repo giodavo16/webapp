@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block titolo %}{{ codice }} — {{ titolo }}{% endblock %}
+{% block contenuto %}
+<div class="banda">
+  <div class="container centro">
+    <h1>{{ codice }}</h1>
+    <p class="sottotitolo"><strong>{{ titolo }}</strong></p>
+    <p>{{ testo }}</p>
+    <a class="bottone" href="{{ url_for('dashboard') }}">Torna al catalogo</a>
+  </div>
+</div>
+{% endblock %}
